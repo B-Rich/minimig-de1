@@ -67,6 +67,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
+use IEEE.numeric_std.all;
 
 entity TG68_fast is
    port(clk               : in std_logic;
@@ -294,7 +295,7 @@ architecture logic of TG68_fast is
     signal nibs_h		  : std_logic_vector(5 downto 0);
     signal nibs_lc		  : std_logic;
     signal nibs_hc		  : std_logic;
-    signal dummy_mulu     : std_logic_vector(31 downto 0);
+    signal dummy_mulu     : std_logic_vector(33 downto 0);
     signal dummy_div      : std_logic_vector(31 downto 0);
     signal dummy_div_sub  : std_logic_vector(16 downto 0);
     signal dummy_div_over : std_logic_vector(16 downto 0);
@@ -798,7 +799,7 @@ process (clk, reset, opcode, TG68_PC, TG68_PC_dec, TG68_PC_br8, TG68_PC_brw, PC_
 				IF fetchOPC='1' THEN
 					trap_interrupt <= '0';
 					IF (test_IPL='1' AND (Flags(10 downto 8)<IPL_nr OR IPL_nr="111")) OR to_SR='1' THEN
---					IF (test_IPL='1' AND (Flags(10 downto 8)<IPL_nr OR IPL_nr="111")) OR to_SR='1' OR opcode(15 downto 6)="0100111011" THEN  --nur für Validator
+--					IF (test_IPL='1' AND (Flags(10 downto 8)<IPL_nr OR IPL_nr="111")) OR to_SR='1' OR opcode(15 downto 6)="0100111011" THEN  --nur fï¿½r Validator
 						opcode <= X"60FE"; 
 						IF to_SR='0' THEN
 							test_delay <= "001";
@@ -870,9 +871,9 @@ PROCESS (clk, reset, opcode)
 				
 				IF writePC_add='1' THEN
 					data_write_tmp <= TG68_PC_add;
-				ELSIF writePC='1' OR fetchOPC='1' OR interrupt='1' OR (trap_trap='1' AND decodeOPC='1') THEN		--fetchOPC für Trap
+				ELSIF writePC='1' OR fetchOPC='1' OR interrupt='1' OR (trap_trap='1' AND decodeOPC='1') THEN		--fetchOPC fï¿½r Trap
 					data_write_tmp <= TG68_PC;
-				ELSIF execOPC='1' OR (get_ea_now='1' AND ea_only='1') THEN		--get_ea_now='1' AND ea_only='1' ist für pea
+				ELSIF execOPC='1' OR (get_ea_now='1' AND ea_only='1') THEN		--get_ea_now='1' AND ea_only='1' ist fï¿½r pea
 					data_write_tmp <= registerin(31 downto 8)&(registerin(7)OR exec_tas)&registerin(6 downto 0);
 				ELSIF (exec_DIRECT='1' AND state="10") OR direct_data='1' THEN
 					data_write_tmp <= data_read;
@@ -1081,7 +1082,7 @@ PROCESS (opcode, OP1in, OP1out, OP2out, datatype, c_out, exec_ABCD, exec_SBCD, e
 			ELSIF exec_SBCD='1' THEN	
 				OP1in(7 downto 0) <= dummy_s(7 downto 0);
 			ELSIF exec_MULU='1' THEN
-				OP1in <= dummy_mulu;	
+				OP1in <= dummy_mulu(31 downto 0);	
 			ELSIF exec_DIVU='1' AND execOPC='1' THEN
 				OP1in <= dummy_div;	
 			ELSIF exec_OR='1' THEN
@@ -1943,7 +1944,7 @@ PROCESS (clk, reset, OP2out, opcode, fetchOPC, decodeOPC, execOPC, endOPC, nextp
 										datatype <= "10";
 										IF decodeOPC='1' THEN
 											next_micro_state <= link;
-											set_exec_MOVE <= '1';						--für displacement
+											set_exec_MOVE <= '1';						--fï¿½r displacement
 											presub <= '1';
 											setstackaddr <='1';
 											set_mem_addsub <= '1';
@@ -2507,7 +2508,7 @@ PROCESS (clk, reset, OP2out, opcode, fetchOPC, decodeOPC, execOPC, endOPC, nextp
 --PROCESS (micro_state)
 --	BEGIN
 		IF Z_error='1'  THEN		-- divu by zero
-			trapmake <= '1';			--wichtig für USP
+			trapmake <= '1';			--wichtig fï¿½r USP
 			IF trapd='0' THEN
 				writePC <= '1';
 			END IF;			
@@ -2762,8 +2763,8 @@ PROCESS (clk, reset, OP2out, opcode, fetchOPC, decodeOPC, execOPC, endOPC, nextp
 
 				WHEN mul1	=>		-- mulu
 					set_exec_MULU <= '1';
-					setstate <="01";
-					next_micro_state <= mul2;
+--					setstate <="01";
+--					next_micro_state <= mul14;
 				WHEN mul2	=>		-- mulu
 					set_exec_MULU <= '1';
 					setstate <="01";
@@ -3071,42 +3072,52 @@ PROCESS (opcode, OP1out, Flags, rot_bits, rot_msb, rot_lsb, rot_rot, rot_nop)
 PROCESS (clk, opcode, OP2out, muls_msb, mulu_reg, OP1sign, sign2)
 	BEGIN
 		IF rising_edge(clk) THEN
-			IF clkena='1' THEN
-				IF decodeOPC='1' THEN
-					IF opcode(8)='1' AND reg_QB(15)='1' THEN				--MULS Neg faktor
-						OP1sign <= '1';
-						mulu_reg <= "0000000000000000"&(0-reg_QB(15 downto 0));
-					ELSE
-						OP1sign <= '0';
-						mulu_reg <= "0000000000000000"&reg_QB(15 downto 0);
-					END IF;	
-				ELSIF exec_MULU='1' THEN
-					mulu_reg <= dummy_mulu;	
-				END IF;
-			END IF;
-		END IF;
-		
-		IF (opcode(8)='1' AND OP2out(15)='1') OR OP1sign='1' THEN
-			muls_msb <= mulu_reg(31);
-		ELSE
-			muls_msb <= '0';
-		END IF;	
-		
-		IF opcode(8)='1' AND OP2out(15)='1' THEN
-			sign2 <= '1';
-		ELSE
-			sign2 <= '0';
-		END IF;	
-		
-		IF mulu_reg(0)='1' THEN
-			IF OP1sign='1' THEN
-				dummy_mulu <= (muls_msb&mulu_reg(31 downto 16))-(sign2&OP2out(15 downto 0))& mulu_reg(15 downto 1);	
-			ELSE
-				dummy_mulu <= (muls_msb&mulu_reg(31 downto 16))+(sign2&OP2out(15 downto 0))& mulu_reg(15 downto 1);	
-			END IF;
-		ELSE
-			dummy_mulu <= muls_msb&mulu_reg(31 downto 1);	
-		END IF;	
+--			IF clkena='1' THEN
+--				IF decodeOPC='1' THEN
+--					IF opcode(8)='1' AND reg_QB(15)='1' THEN				--MULS Neg faktor
+--						OP1sign <= '1';
+--						mulu_reg <= "0000000000000000"&(0-reg_QB(15 downto 0));
+--					ELSE
+--						OP1sign <= '0';
+--						mulu_reg <= "0000000000000000"&reg_QB(15 downto 0);
+--					END IF;	
+--				ELSIF exec_MULU='1' THEN
+--					mulu_reg <= dummy_mulu;	
+--				END IF;
+--			END IF;
+	
+		dummy_mulu(33 downto 0) <=
+			std_logic_vector(
+				signed((opcode(8) and OP2out(15)) & OP2out(15 downto 0)) *
+				signed((opcode(8) and OP1out(15)) & OP1out(15 downto 0)));
+--		if opcode(8)='1' THEN
+--			dummy_mulu(31 downto 0) <= std_logic_vector(signed(OP2out(15 downto 0)) * signed(OP1out(15 downto 0)));
+--		else
+--			dummy_mulu(31 downto 0) <= std_logic_vector(unsigned(OP2out(15 downto 0)) * unsigned(OP1out(15 downto 0)));
+--		end if;
+	END IF;
+	
+--		IF (opcode(8)='1' AND OP2out(15)='1') OR OP1sign='1' THEN
+--			muls_msb <= mulu_reg(31);
+--		ELSE
+--			muls_msb <= '0';
+--		END IF;	
+--		
+--		IF opcode(8)='1' AND OP2out(15)='1' THEN
+--			sign2 <= '1';
+--		ELSE
+--			sign2 <= '0';
+--		END IF;	
+--		
+--		IF mulu_reg(0)='1' THEN
+--			IF OP1sign='1' THEN
+--				dummy_mulu <= (muls_msb&mulu_reg(31 downto 16))-(sign2&OP2out(15 downto 0))& mulu_reg(15 downto 1);
+--			ELSE
+--				dummy_mulu <= (muls_msb&mulu_reg(31 downto 16))+(sign2&OP2out(15 downto 0))& mulu_reg(15 downto 1);	
+--			END IF;
+--		ELSE
+--			dummy_mulu <= muls_msb&mulu_reg(31 downto 1);	
+--		END IF;	
 	END PROCESS;
 	
 -----------------------------------------------------------------------------
