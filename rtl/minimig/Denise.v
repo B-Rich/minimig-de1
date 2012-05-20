@@ -84,6 +84,7 @@ parameter DIWHIGH  = 9'h1E4;
 parameter BPLCON0  = 9'h100;  		
 parameter BPLCON2  = 9'h104; 
 parameter BPLCON3  = 9'h106; 
+parameter BPLCON4  = 9'h10C;
 parameter DENISEID = 9'h07C;
 parameter BPL1DAT  = 9'h110;
 
@@ -96,7 +97,9 @@ reg		[3:0] bpu;				// bitplane enable
 reg		[3:0] l_bpu;			// latched bitplane enable
 reg		enaecs;					// enable ECS features like border blank (bplcon0.0)
 reg		[15:0] bplcon2;			// bplcon2 (playfield video priority) register
-reg		[15:0] bplcon3;			// bplcon3 register (border blank)
+reg		[15:0] bplcon3;			// bplcon3 register (border blank)  (palette bank for writes), low word enable
+reg		[15:0] bplcon4;		// Palette offset - upper 8 bits xored with bitplane data.
+
 wire 	brdrblnk;				// border blank enable
 
 reg		[8:0] hdiwstrt;			// horizontal display window start position
@@ -112,7 +115,7 @@ wire	sprsel;					// sprite select
 
 wire	[11:0] ham_rgb;			// hold and modify mode RGB video data
 reg		[5:0] clut_data;		// colour table colour select in
-wire	[11:0] clut_rgb;		// colour table rgb data out
+wire	[23:0] clut_rgb;		// colour table rgb data out
 wire	[11:0] out_rgb;			// final multiplexer rgb output data
 reg		window;					// window enable signal
 
@@ -178,6 +181,8 @@ always @(posedge clk)
 		bplcon2[15:0] <= data_in[15:0];
 
 // BPLCON3 register
+// LOCT - bit 9
+// BANK - 15:13
 always @(posedge clk)
 	if (reset)
 		bplcon3 <= 16'h00_00;
@@ -185,6 +190,15 @@ always @(posedge clk)
 		bplcon3[15:0] <= data_in[15:0];
 
 assign brdrblnk = bplcon3[5];
+
+
+// BPLCON4 register - bitplane and sprite palette offsets (xored)
+always @(posedge clk)
+	if (reset)
+		bplcon4 <= 16'h00_00;
+	else if (reg_address_in[8:1]==BPLCON4[8:1])
+		bplcon4[15:0] <= data_in[15:0];
+
 		
 // DIWSTART and DIWSTOP registers (vertical and horizontal limits of display window)
 	
@@ -288,10 +302,12 @@ colortable clut0
 (
 	.clk(clk),
 	.clk28m(clk28m),
+	.bank(bplcon3[15:13]),
 	.reg_address_in(reg_address_in),
 	.data_in(data_in[11:0]),
-	.select(clut_data),
-  .a1k(a1k),
+	.low_rgb(bplcon3[9]),
+	.select(clut_data ^ bplcon4[13:8]), // Apply palette offset
+   .a1k(a1k),
 	.rgb(clut_rgb) // rgb data is delayed by one clk28m clock cycle
 );
 
@@ -341,7 +357,7 @@ begin
 end
 
 // ham_rgb / clut_rgb multiplexer
-assign out_rgb = homod && window_del && !sprsel_del ? ham_rgb : clut_rgb; //if no HAM mode, always select normal (table selected) rgb data
+assign out_rgb = homod && window_del && !sprsel_del ? ham_rgb : {clut_rgb[23:20],clut_rgb[15:12],clut_rgb[7:4]}; //if no HAM mode, always select normal (table selected) rgb data
 
 //--------------------------------------------------------------------------------------
 
@@ -366,34 +382,64 @@ module colortable
 (
 	input 	clk,		   			// bus clock / lores pixel clock
 	input	clk28m,					// 35ns pixel clock
+	input	[2:0] bank, // Write bank from bplcon3
 	input 	[8:1] reg_address_in,	// register adress inputs
 	input 	[11:0] data_in,			// bus data in
-	input	[5:0] select,			// colour select input
+	input low_rgb,	// data should be written to the 4 LSBs of each gun...
+	input	[7:0] select,			// colour select input
   input a1k,              // EHB control
-	output	reg [11:0] rgb			// RGB output
+//	output	reg [11:0] rgb			// RGB output
+	output	[23:0] rgb			// RGB output
 );
 
 // register names and adresses		
 parameter COLORBASE = 9'h180;  		// colour table base address
 
 // local signals
-reg 	[11:0] colortable [31:0];	// colour table
-wire	[11:0] selcolor; 			// selected colour register output
+//reg 	[11:0] colortable [31:0];	// colour table
+//wire	[11:0] selcolor; 			// selected colour register output
+
+ColourtableDPBlockram ctbram
+(
+	.wraddress({bank,reg_address_in[5:1]}),
+	.rdaddress(select),
+	.rdclock(clk28m),
+	.wrclock(clk),
+	.data(data_in),
+	.wren((low_rgb==0) && (reg_address_in[8:6]==COLORBASE[8:6])),
+	.q({rgb[23:20],rgb[15:12],rgb[7:4]})
+);
+
+
+ColourtableDPBlockram ctbram_lo
+(
+	.wraddress({bank,reg_address_in[5:1]}),
+	.rdaddress(select),
+	.rdclock(clk28m),
+	.wrclock(clk),
+	.data(data_in),
+	.wren(reg_address_in[8:6]==COLORBASE[8:6]),
+	.q({rgb[19:16],rgb[11:8],rgb[3:0]})
+);
+
 
 // writing of colour table from bus (implemented using dual port distributed ram)
-always @(posedge clk)
-	if (reg_address_in[8:6]==COLORBASE[8:6])
-		colortable[reg_address_in[5:1]] <= data_in[11:0];
-
+//always @(posedge clk)
+//	if (reg_address_in[8:6]==COLORBASE[8:6])
+//		colortable[reg_address_in[5:1]] <= data_in[11:0];
+	
 // reading of colour table
-assign selcolor = colortable[select[4:0]];   
+//assign selcolor = colortable[select[4:0]];   
 
 // extra half brite mode shifter
-always @(posedge clk28m)
-	if (select[5] && !a1k) // half bright, shift every component 1 position to the right
-		rgb <= {1'b0,selcolor[11:9],1'b0,selcolor[7:5],1'b0,selcolor[3:1]};
-	else // normal colour select
-		rgb <= selcolor;
+//always @(posedge clk28m)
+//	if (select[5] && !a1k) // half bright, shift every component 1 position to the right
+//		rgb <= {1'b0,selcolor[11:9],1'b0,selcolor[7:5],1'b0,selcolor[3:1]};
+//	else // normal colour select
+//		if (reg_address_in[8:1]=={COLORBASE[8:6],select[4:0]}) // read-during-write...
+//			rgb <= data_in[11:0];
+//		else
+//			rgb <= selcolor;
 
 endmodule
 
