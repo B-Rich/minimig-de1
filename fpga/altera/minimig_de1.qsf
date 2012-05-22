@@ -593,6 +593,10 @@ set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_RO
 set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING OFF
 set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA OFF
 set_global_assignment -name PHYSICAL_SYNTHESIS_MAP_LOGIC_TO_MEMORY_FOR_AREA OFF
+
+
+
+set_global_assignment -name SDC_FILE ../../rtl/de1/TimingConstraints.sdc
 set_global_assignment -name VERILOG_FILE ../../rtl/soc/minimig_de1_top.v
 set_global_assignment -name VERILOG_FILE ../../rtl/de1/amigaclk.v
 set_global_assignment -name VERILOG_FILE ../../lib/altera/i_sync.v
@@ -629,8 +633,5 @@ set_global_assignment -name VERILOG_FILE ../../rtl/minimig/Audio.v
 set_global_assignment -name VERILOG_FILE ../../rtl/minimig/Amber.v
 set_global_assignment -name VERILOG_FILE ../../rtl/minimig/Agnus.v
 set_global_assignment -name VERILOG_FILE ../../rtl/minimig/ActionReplay3.v
-
-
-
 set_global_assignment -name QIP_FILE ../../rtl/de1/ColourtableDPBlockram.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
