@@ -41,9 +41,9 @@ set_time_format -unit ns -decimal_places 3
 create_clock -name {altera_reserved_tck} -period 100.000 -waveform { 0.000 50.000 } [get_ports {altera_reserved_tck}]
 create_clock -name Master -period 37.037 [get_ports {CLOCK_27[0]}]
 create_clock -name tg68_state -period 8.705 [get_registers {TG68_fast:tg68_fast|state[0]}]
+create_clock -name tg68_state -period 8.705 [get_registers {TG68:tg68|TG68_fast:tg68_fast_inst|state[0]}]
 create_clock -name Generated_7m -period 141 [get_registers {sdram:sdram|c_7m}]
 create_clock -name Generated_pulse -period 141 [get_registers {sdram:sdram|pulse}]
-create_clock -name spi_clock -period 34.823 [get_registers {cfide:cfide|sck}]
 
 #**************************************************************
 # Create Generated Clock
